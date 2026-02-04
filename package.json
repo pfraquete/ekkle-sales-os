@@ -1,0 +1,35 @@
+{
+  "name": "ekkle-sales-os",
+  "version": "1.0.0",
+  "description": "EKKLE SALES OS - Sistema de vendas B2B para igrejas com WhatsApp automation",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "dev:api": "bun run --watch src/api/server.ts",
+    "dev:worker": "bun run --watch src/workers/index.ts",
+    "start": "bun run src/index.ts",
+    "start:api": "bun run src/api/server.ts",
+    "start:worker": "bun run src/workers/index.ts",
+    "build": "bun build src/index.ts --outdir ./dist --target bun",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.1.0",
+    "@elysiajs/swagger": "^1.1.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "bullmq": "^5.12.0",
+    "elysia": "^1.1.0",
+    "ioredis": "^5.4.1",
+    "openai": "^4.56.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.6",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "license": "MIT"
+}
