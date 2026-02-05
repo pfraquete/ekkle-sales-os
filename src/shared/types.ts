@@ -23,7 +23,8 @@ export type LeadTemperature =
 export type AgentType = 
   | 'sdr'           // Sales Development Rep - primeiro contato
   | 'bdr'           // Business Development Rep - qualificação técnica
-  | 'closer';       // Closer - fechamento de vendas
+  | 'ae'            // Account Executive - fechamento de vendas
+  | 'closer';       // Closer - alias para AE (compatibilidade)
 
 export interface Lead {
   id: string;

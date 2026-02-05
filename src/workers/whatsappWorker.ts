@@ -1,6 +1,9 @@
 /**
  * EKKLE SALES OS - WhatsApp Message Worker
- * Processa mensagens da fila com agentes AI
+ * Processa mensagens da fila com agentes AI especializados
+ * 
+ * ATUALIZADO: Agora usa sistema de memória de longo prazo,
+ * agentes especializados (SDR/BDR/AE) e análise de mercado
  */
 
 import { Worker, Job } from 'bullmq';
@@ -20,11 +23,102 @@ import {
   createAgentExecution, 
   updateAgentExecution 
 } from '../api/services/agentExecutionService';
-import { processWithAgent } from '../agents/baseAgent';
-import { sendMessageWithTyping } from '../agents/evolutionClient';
-import type { WhatsAppQueueJob } from '../shared/types';
+import { 
+  processWithSpecializedAgent,
+  isBusinessHours,
+  getOffHoursResponse,
+  type SpecializedAgentType
+} from '../agents/specializedAgents';
+import { 
+  getWhatsAppService,
+  type SendMessageResult 
+} from '../agents/whatsappService';
+import {
+  analyzeChurchRegion,
+  getMarketAnalysis,
+  shouldTriggerAnalysis,
+  formatAnalysisForAgent
+} from '../agents/marketAnalysisService';
+import type { WhatsAppQueueJob, Lead } from '../shared/types';
 
 const logger = createLogger('whatsapp-worker');
+
+// ===========================================
+// Helper Functions
+// ===========================================
+
+/**
+ * Verifica se a mensagem é duplicada (idempotência)
+ */
+const isMessageDuplicate = async (
+  leadId: string,
+  messageId: string
+): Promise<boolean> => {
+  try {
+    const conversations = await getRecentConversations(leadId, 5);
+    
+    return conversations.some(c => {
+      const metadata = c.metadata as { messageId?: string } | null;
+      return metadata?.messageId === messageId;
+    });
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Processa análise de mercado se necessário
+ */
+const processMarketAnalysis = async (
+  lead: Lead,
+  extractedData: Record<string, unknown>
+): Promise<{
+  competitorCount: number;
+  digitalScore: number;
+  opportunity: string;
+} | undefined> => {
+  try {
+    const currentMetadata = (lead.metadata || {}) as Record<string, unknown>;
+    
+    // Verificar se deve triggerar análise
+    if (shouldTriggerAnalysis(currentMetadata, extractedData)) {
+      logger.info('Triggering market analysis', { leadId: lead.id });
+      
+      const address = (extractedData.address || currentMetadata.address) as string | null;
+      const instagram = (extractedData.instagram || currentMetadata.instagram) as string | null;
+      
+      const analysis = await analyzeChurchRegion(lead, address, instagram);
+      
+      return {
+        competitorCount: analysis.competitorCount,
+        digitalScore: analysis.digitalScore,
+        opportunity: analysis.opportunity
+      };
+    }
+    
+    // Buscar análise existente se lead já tem dados
+    if (currentMetadata.address || currentMetadata.instagram) {
+      const existingAnalysis = await getMarketAnalysis(lead.id);
+      
+      if (existingAnalysis) {
+        return {
+          competitorCount: existingAnalysis.competitor_count,
+          digitalScore: existingAnalysis.digital_score,
+          opportunity: existingAnalysis.opportunity
+        };
+      }
+    }
+    
+    return undefined;
+  } catch (error) {
+    logger.error('Error processing market analysis', error, { leadId: lead.id });
+    return undefined;
+  }
+};
+
+// ===========================================
+// Main Processing Function
+// ===========================================
 
 /**
  * Processa uma mensagem WhatsApp recebida
@@ -51,44 +145,104 @@ const processWhatsAppMessage = async (job: Job<WhatsAppQueueJob>): Promise<void>
       phone 
     });
 
-    // 2. Atualizar nome se veio no pushName e lead não tinha
+    // 2. Verificar duplicidade (idempotência)
+    if (messageId && await isMessageDuplicate(lead.id, messageId)) {
+      logger.warn('Duplicate message detected, skipping', { 
+        leadId: lead.id, 
+        messageId 
+      });
+      return;
+    }
+
+    // 3. Atualizar nome se veio no pushName e lead não tinha
     if (pushName && !lead.name) {
       await updateLead(lead.id, { name: pushName });
       lead.name = pushName;
     }
 
-    // 3. Salvar mensagem recebida no banco
+    // 4. Salvar mensagem recebida no banco
     await createConversation({
       lead_id: lead.id,
       message,
       direction: 'inbound',
-      agent_name: lead.assigned_agent as any,
+      agent_name: lead.assigned_agent as SpecializedAgentType,
       intent_detected: 'unknown',
       metadata: { messageId, timestamp }
     });
 
-    // 4. Criar registro de execução do agente
+    // 5. Verificar horário comercial
+    if (!isBusinessHours()) {
+      logger.info('Outside business hours, sending auto-reply', { leadId: lead.id });
+      
+      const offHoursMessage = getOffHoursResponse();
+      
+      // Salvar resposta automática
+      await createConversation({
+        lead_id: lead.id,
+        message: offHoursMessage,
+        direction: 'outbound',
+        agent_name: 'sdr',
+        intent_detected: 'off_hours',
+        metadata: { auto_reply: true }
+      });
+      
+      // Enviar via WhatsApp
+      const whatsapp = getWhatsAppService();
+      await whatsapp.sendText(phone, offHoursMessage);
+      
+      logger.queue(QUEUE_NAMES.WHATSAPP_INCOMING, 'completed', job.id, {
+        phone,
+        leadId: lead.id,
+        offHours: true
+      });
+      
+      return;
+    }
+
+    // 6. Criar registro de execução do agente
     const execution = await createAgentExecution({
       lead_id: lead.id,
-      agent_name: lead.assigned_agent as any,
+      agent_name: lead.assigned_agent as SpecializedAgentType,
       input_message: message,
       status: 'started'
     });
 
-    // 5. Buscar conversas recentes para contexto
-    const recentConversations = await getRecentConversations(lead.id, 10);
+    // 7. Buscar análise de mercado existente (se houver)
+    let marketAnalysis: {
+      competitorCount: number;
+      digitalScore: number;
+      opportunity: string;
+    } | undefined;
+    
+    const existingAnalysis = await getMarketAnalysis(lead.id);
+    if (existingAnalysis) {
+      marketAnalysis = {
+        competitorCount: existingAnalysis.competitor_count,
+        digitalScore: existingAnalysis.digital_score,
+        opportunity: existingAnalysis.opportunity
+      };
+    }
 
-    // 6. Processar com agente AI
-    const agentResponse = await processWithAgent(
-      {
-        lead,
-        recentConversations,
-        systemPrompt: '' // Será definido pelo agente
-      },
-      message
+    // 8. Processar com agente especializado
+    const agentResponse = await processWithSpecializedAgent(
+      lead,
+      message,
+      marketAnalysis
     );
 
-    // 7. Atualizar execução com resultado
+    // 9. Processar análise de mercado se SDR coletou dados novos
+    if (agentResponse.shouldTriggerAnalysis && agentResponse.extractedData) {
+      const newAnalysis = await processMarketAnalysis(lead, agentResponse.extractedData);
+      
+      if (newAnalysis) {
+        logger.info('Market analysis completed', {
+          leadId: lead.id,
+          opportunity: newAnalysis.opportunity
+        });
+      }
+    }
+
+    // 10. Atualizar execução com resultado
     const executionTime = Date.now() - startTime;
     await updateAgentExecution(execution.id, {
       output_message: agentResponse.message,
@@ -98,48 +252,62 @@ const processWhatsAppMessage = async (job: Job<WhatsAppQueueJob>): Promise<void>
       status: 'completed'
     });
 
-    // 8. Salvar resposta do agente no banco
+    // 11. Salvar resposta do agente no banco
     await createConversation({
       lead_id: lead.id,
       message: agentResponse.message,
       direction: 'outbound',
-      agent_name: agentResponse.shouldTransfer 
-        ? agentResponse.transferTo! 
-        : lead.assigned_agent as any,
+      agent_name: agentResponse.agentUsed,
       intent_detected: agentResponse.intent,
       metadata: { executionId: execution.id }
     });
 
-    // 9. Atualizar agente do lead se houve transferência
-    if (agentResponse.shouldTransfer && agentResponse.transferTo) {
-      await updateLead(lead.id, { 
-        assigned_agent: agentResponse.transferTo 
-      });
+    // 12. Atualizar status/temperatura do lead se necessário
+    if (agentResponse.shouldUpdateStatus) {
+      const updates: Partial<Lead> = {};
       
-      logger.info('Lead transferred to new agent', {
-        leadId: lead.id,
-        from: lead.assigned_agent,
-        to: agentResponse.transferTo
-      });
-    }
-
-    // 10. Atualizar temperatura do lead baseado na intent
-    const temperatureMap: Record<string, string> = {
-      'closing': 'hot',
-      'pricing': 'warm',
-      'features': 'warm',
-      'greeting': 'cold'
-    };
-    
-    if (temperatureMap[agentResponse.intent]) {
-      const newTemp = temperatureMap[agentResponse.intent];
-      if (newTemp !== lead.temperature) {
-        await updateLead(lead.id, { temperature: newTemp as any });
+      if (agentResponse.newStatus) {
+        updates.status = agentResponse.newStatus as Lead['status'];
+      }
+      if (agentResponse.newTemperature) {
+        updates.temperature = agentResponse.newTemperature as Lead['temperature'];
+      }
+      
+      // Atualizar agente baseado no novo status
+      if (agentResponse.newStatus === 'qualified') {
+        updates.assigned_agent = 'bdr';
+      } else if (agentResponse.newStatus === 'negotiating') {
+        updates.assigned_agent = 'ae';
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        await updateLead(lead.id, updates);
+        
+        logger.info('Lead updated', {
+          leadId: lead.id,
+          updates
+        });
       }
     }
 
-    // 11. Enviar resposta via WhatsApp
-    const sendResult = await sendMessageWithTyping(phone, agentResponse.message);
+    // 13. Atualizar metadata do lead com dados extraídos
+    if (agentResponse.extractedData && Object.keys(agentResponse.extractedData).length > 0) {
+      const currentMetadata = (lead.metadata || {}) as Record<string, unknown>;
+      const newMetadata = { ...currentMetadata, ...agentResponse.extractedData };
+      
+      await updateLead(lead.id, { 
+        metadata: newMetadata 
+      });
+      
+      logger.info('Lead metadata updated', {
+        leadId: lead.id,
+        newFields: Object.keys(agentResponse.extractedData)
+      });
+    }
+
+    // 14. Enviar resposta via WhatsApp com delay humanizado
+    const whatsapp = getWhatsAppService();
+    const sendResult = await whatsapp.sendText(phone, agentResponse.message);
 
     if (!sendResult.success) {
       logger.error('Failed to send WhatsApp response', null, {
@@ -152,6 +320,7 @@ const processWhatsAppMessage = async (job: Job<WhatsAppQueueJob>): Promise<void>
     logger.queue(QUEUE_NAMES.WHATSAPP_INCOMING, 'completed', job.id, {
       phone,
       leadId: lead.id,
+      agentUsed: agentResponse.agentUsed,
       intent: agentResponse.intent,
       executionTimeMs: executionTime,
       messageSent: sendResult.success
@@ -171,11 +340,15 @@ const processWhatsAppMessage = async (job: Job<WhatsAppQueueJob>): Promise<void>
   }
 };
 
+// ===========================================
+// Worker Creation
+// ===========================================
+
 /**
  * Cria e inicia o worker
  */
 export const createWhatsAppWorker = (): Worker<WhatsAppQueueJob> => {
-  logger.info('Creating WhatsApp worker');
+  logger.info('Creating WhatsApp worker with specialized agents');
 
   const worker = new Worker<WhatsAppQueueJob>(
     QUEUE_NAMES.WHATSAPP_INCOMING,
