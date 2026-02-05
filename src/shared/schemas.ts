@@ -20,7 +20,7 @@ export const LeadStatusSchema = z.enum([
 
 export const LeadTemperatureSchema = z.enum(['cold', 'warm', 'hot']);
 
-export const AgentTypeSchema = z.enum(['sdr', 'bdr', 'closer']);
+export const AgentTypeSchema = z.enum(['sdr', 'bdr', 'ae', 'closer']);
 
 export const MessageDirectionSchema = z.enum(['inbound', 'outbound']);
 
@@ -156,7 +156,7 @@ export const PaginationQuerySchema = z.object({
 });
 
 // ===========================================
-// Type Exports
+// Type Exports (inferidos dos schemas)
 // ===========================================
 
 export type CreateLeadInput = z.infer<typeof CreateLeadSchema>;

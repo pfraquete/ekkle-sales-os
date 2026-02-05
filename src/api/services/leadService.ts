@@ -3,12 +3,15 @@
  * Operações de banco de dados para leads
  */
 
-import { getSupabaseAdmin } from '../../shared/supabase';
+import { getSupabaseAdmin, type Database } from '../../shared/supabase';
 import { createLogger } from '../../shared/logger';
 import type { Lead, CreateLeadInput, UpdateLeadInput, PaginatedResponse } from '../../shared/types';
 import { NotFoundError } from '../middleware/errorHandler';
 
 const logger = createLogger('lead-service');
+
+type LeadInsert = Database['public']['Tables']['leads']['Insert'];
+type LeadUpdate = Database['public']['Tables']['leads']['Update'];
 
 /**
  * Busca lead por telefone
@@ -80,17 +83,19 @@ export const createOrGetLead = async (input: CreateLeadInput): Promise<{ lead: L
     
     logger.db('INSERT', 'leads', { phone: input.phone });
     
+    const insertData: LeadInsert = {
+      phone: input.phone,
+      name: input.name || null,
+      church_name: input.church_name || null,
+      status: input.status || 'new',
+      temperature: input.temperature || 'cold',
+      assigned_agent: input.assigned_agent || 'sdr',
+      metadata: input.metadata || {}
+    };
+    
     const { data, error } = await supabase
       .from('leads')
-      .insert({
-        phone: input.phone,
-        name: input.name || null,
-        church_name: input.church_name || null,
-        status: input.status || 'new',
-        temperature: input.temperature || 'cold',
-        assigned_agent: input.assigned_agent || 'sdr',
-        metadata: input.metadata || {}
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -122,9 +127,18 @@ export const updateLead = async (id: string, input: UpdateLeadInput): Promise<Le
     
     logger.db('UPDATE', 'leads', { id, ...input });
     
+    const updateData: LeadUpdate = {
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.church_name !== undefined && { church_name: input.church_name }),
+      ...(input.status !== undefined && { status: input.status }),
+      ...(input.temperature !== undefined && { temperature: input.temperature }),
+      ...(input.assigned_agent !== undefined && { assigned_agent: input.assigned_agent }),
+      ...(input.metadata !== undefined && { metadata: input.metadata })
+    };
+    
     const { data, error } = await supabase
       .from('leads')
-      .update(input)
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();

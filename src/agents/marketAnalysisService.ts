@@ -3,11 +3,13 @@
  * Análise de mercado da região da igreja (Mock inicial)
  */
 
-import { getSupabaseAdmin } from '../shared/supabase';
+import { getSupabaseAdmin, type Database } from '../shared/supabase';
 import { createLogger } from '../shared/logger';
 import type { Lead } from '../shared/types';
 
 const logger = createLogger('market-analysis');
+
+type AnalyticsInsert = Database['public']['Tables']['analytics']['Insert'];
 
 // ===========================================
 // Types
@@ -144,23 +146,25 @@ export const saveMarketAnalysis = async (
     
     logger.db('INSERT', 'analytics', { lead_id: leadId });
     
+    const insertData: AnalyticsInsert = {
+      lead_id: leadId,
+      analysis_type: 'market_analysis',
+      address,
+      instagram,
+      competitor_count: analysis.competitorCount,
+      digital_score: analysis.digitalScore,
+      opportunity: analysis.opportunity,
+      raw_data: {
+        insights: analysis.insights,
+        recommendations: analysis.recommendations,
+        generated_at: new Date().toISOString(),
+        version: '1.0-mock'
+      }
+    };
+    
     const { data, error } = await supabase
       .from('analytics')
-      .insert({
-        lead_id: leadId,
-        analysis_type: 'market_analysis',
-        address,
-        instagram,
-        competitor_count: analysis.competitorCount,
-        digital_score: analysis.digitalScore,
-        opportunity: analysis.opportunity,
-        raw_data: {
-          insights: analysis.insights,
-          recommendations: analysis.recommendations,
-          generated_at: new Date().toISOString(),
-          version: '1.0-mock'
-        }
-      })
+      .insert(insertData)
       .select()
       .single();
 

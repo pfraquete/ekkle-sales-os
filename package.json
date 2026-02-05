@@ -11,8 +11,18 @@
     "start:api": "bun run src/api/server.ts",
     "start:worker": "bun run src/workers/index.ts",
     "build": "bun build src/index.ts --outdir ./dist --target bun",
+    "build:api": "bun build src/api/server.ts --outdir ./dist/api --target bun",
+    "build:worker": "bun build src/workers/index.ts --outdir ./dist/worker --target bun",
     "lint": "eslint src --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "bun test",
+    "test:db": "bun run scripts/test-db.ts",
+    "security:check": "bun run scripts/security-check.ts",
+    "migrate": "bun run scripts/migrate.ts",
+    "seed": "bun run scripts/seeds.ts",
+    "db:setup": "bun run migrate && bun run seed"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.1.0",
@@ -26,6 +36,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.1.6",
+    "prettier": "^3.3.3",
     "typescript": "^5.5.4"
   },
   "engines": {

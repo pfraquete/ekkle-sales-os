@@ -3,12 +3,14 @@
  * Sistema de memória de longo prazo para contexto dos agentes
  */
 
-import { getSupabaseAdmin } from '../shared/supabase';
+import { getSupabaseAdmin, type Database } from '../shared/supabase';
 import { createLogger } from '../shared/logger';
 import { chatCompletion } from './kimiClient';
-import type { Lead, Conversation, AgentType } from '../shared/types';
+import type { Lead, Conversation } from '../shared/types';
 
 const logger = createLogger('memory-service');
+
+type ConversationSummaryInsert = Database['public']['Tables']['conversation_summaries']['Insert'];
 
 // ===========================================
 // Types
@@ -141,15 +143,17 @@ export const saveConversationSummary = async (
     
     logger.db('UPSERT', 'conversation_summaries', { lead_id: leadId });
     
+    const insertData: ConversationSummaryInsert = {
+      lead_id: leadId,
+      summary,
+      messages_count: messagesCount,
+      last_message_id: lastMessageId,
+      key_points: keyPoints
+    };
+    
     const { data, error } = await supabase
       .from('conversation_summaries')
-      .upsert({
-        lead_id: leadId,
-        summary,
-        messages_count: messagesCount,
-        last_message_id: lastMessageId,
-        key_points: keyPoints
-      }, {
+      .upsert(insertData, {
         onConflict: 'lead_id'
       })
       .select()

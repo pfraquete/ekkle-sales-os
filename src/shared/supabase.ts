@@ -171,6 +171,79 @@ export interface Database {
           updated_at?: string;
         };
       };
+      analytics: {
+        Row: {
+          id: string;
+          lead_id: string;
+          analysis_type: string;
+          address: string | null;
+          instagram: string | null;
+          competitor_count: number;
+          digital_score: number;
+          opportunity: string;
+          raw_data: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          analysis_type?: string;
+          address?: string | null;
+          instagram?: string | null;
+          competitor_count?: number;
+          digital_score?: number;
+          opportunity?: string;
+          raw_data?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          lead_id?: string;
+          analysis_type?: string;
+          address?: string | null;
+          instagram?: string | null;
+          competitor_count?: number;
+          digital_score?: number;
+          opportunity?: string;
+          raw_data?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      conversation_summaries: {
+        Row: {
+          id: string;
+          lead_id: string;
+          summary: string;
+          messages_count: number;
+          last_message_id: string | null;
+          key_points: string[];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          summary: string;
+          messages_count?: number;
+          last_message_id?: string | null;
+          key_points?: string[];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          lead_id?: string;
+          summary?: string;
+          messages_count?: number;
+          last_message_id?: string | null;
+          key_points?: string[];
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 }

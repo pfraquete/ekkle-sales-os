@@ -3,11 +3,13 @@
  * Operações de banco de dados para conversações
  */
 
-import { getSupabaseAdmin } from '../../shared/supabase';
+import { getSupabaseAdmin, type Database } from '../../shared/supabase';
 import { createLogger } from '../../shared/logger';
 import type { Conversation, CreateConversationInput } from '../../shared/types';
 
 const logger = createLogger('conversation-service');
+
+type ConversationInsert = Database['public']['Tables']['conversations']['Insert'];
 
 /**
  * Cria nova mensagem de conversação
@@ -21,16 +23,18 @@ export const createConversation = async (input: CreateConversationInput): Promis
       direction: input.direction 
     });
     
+    const insertData: ConversationInsert = {
+      lead_id: input.lead_id,
+      message: input.message,
+      direction: input.direction,
+      agent_name: input.agent_name,
+      intent_detected: input.intent_detected,
+      metadata: input.metadata || {}
+    };
+    
     const { data, error } = await supabase
       .from('conversations')
-      .insert({
-        lead_id: input.lead_id,
-        message: input.message,
-        direction: input.direction,
-        agent_name: input.agent_name,
-        intent_detected: input.intent_detected,
-        metadata: input.metadata || {}
-      })
+      .insert(insertData)
       .select()
       .single();
 
