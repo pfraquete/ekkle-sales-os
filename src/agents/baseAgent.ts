@@ -5,14 +5,14 @@
 
 import { chatCompletion, analyzeIntent, type ChatMessage } from './kimiClient';
 import { createLogger } from '../shared/logger';
-import { AGENT_SYSTEM_PROMPTS } from '../shared/config';
-import type { 
-  Lead, 
-  Conversation, 
-  AgentType, 
-  IntentType, 
+import { buildPrompt, type PromptContext } from './prompts';
+import type {
+  Lead,
+  Conversation,
+  AgentType,
+  IntentType,
   AgentResponse,
-  AgentContext 
+  AgentContext
 } from '../shared/types';
 
 const logger = createLogger('base-agent');
@@ -123,32 +123,38 @@ export const processWithAgent = async (
       context.lead.assigned_agent as AgentType
     );
     
-    // 4. Construir mensagens para o LLM
-    const systemPrompt = AGENT_SYSTEM_PROMPTS[targetAgent];
+    // 4. Construir contexto para o prompt
     const conversationHistory = formatConversationHistory(context.recentConversations);
-    
-    const contextPrompt = `
-INFORMAÇÕES DO LEAD:
-- Nome: ${context.lead.name || 'Não informado'}
-- Igreja: ${context.lead.church_name || 'Não informada'}
-- Telefone: ${context.lead.phone}
-- Status: ${context.lead.status}
-- Temperatura: ${context.lead.temperature}
 
-HISTÓRICO DE CONVERSAS:
-${conversationHistory}
+    const promptContext: PromptContext = {
+      name: context.lead.name || 'Pastor',
+      church_name: context.lead.church_name || '',
+      status: context.lead.status,
+      temperature: context.lead.temperature,
+      address: context.lead.address || '',
+      instagram: context.lead.instagram || '',
+      message: message,
+      last_message: context.recentConversations[0]?.message || '',
+      conversation_history: conversationHistory,
+      competitor_count: 5, // TODO: integrar com analise real
+      digital_score: 3 // TODO: integrar com analise real
+    };
 
+    // 5. Construir prompt personalizado do agente
+    const systemPrompt = buildPrompt(targetAgent, promptContext);
+
+    // Info adicional de contexto
+    const contextInfo = `
 INTENT DETECTADA: ${intent}
-${!isBusinessHours() ? '\n⚠️ ATENÇÃO: Fora do horário comercial!' : ''}
+${!isBusinessHours() ? '\nATENCAO: Fora do horario comercial!' : ''}
 `;
 
     const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'system', content: contextPrompt },
+      { role: 'system', content: systemPrompt + contextInfo },
       { role: 'user', content: message }
     ];
 
-    // 5. Chamar Kimi API
+    // 6. Chamar Kimi API
     logger.agent(targetAgent, 'processing', {
       leadId: context.lead.id,
       intent,
