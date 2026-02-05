@@ -1,125 +1,118 @@
 # ===========================================
-# EKKLE SALES OS - Docker Compose
-# Para desenvolvimento e testes locais
+# EKKLE SALES OS - Docker Compose (Local)
+# Ambiente de desenvolvimento completo
 # ===========================================
 
 version: '3.8'
 
 services:
-  # ===========================================
+  # -------------------------------------------
   # API Service
-  # ===========================================
+  # -------------------------------------------
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ekkle-api
-    ports:
-      - "3000:3000"
+    container_name: ekkle_api
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - NODE_ENV=development
       - PORT=3000
-      - API_HOST=0.0.0.0
       - REDIS_URL=redis://redis:6379
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - KIMI_API_KEY=${KIMI_API_KEY}
-      - KIMI_API_BASE_URL=${KIMI_API_BASE_URL:-https://api.moonshot.cn/v1}
-      - KIMI_MODEL=${KIMI_MODEL:-moonshot-v1-128k}
-      - EVOLUTION_API_URL=${EVOLUTION_API_URL}
-      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
-      - EVOLUTION_INSTANCE_NAME=${EVOLUTION_INSTANCE_NAME:-ekkle-sales}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - SUPABASE_URL=http://db:5432 # Aponta para o PostgreSQL local
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0 # Chave de dev
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96QvXFod3ZWnPPE-qmqGwezhQLcOx_jWYr9tB1M # Chave de dev
+    ports:
+      - "3000:3000"
     depends_on:
       redis:
         condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+    command: bun run --watch src/api/server.ts
     networks:
       - ekkle-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
-  # ===========================================
+  # -------------------------------------------
   # Worker Service
-  # ===========================================
+  # -------------------------------------------
   worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    container_name: ekkle-worker
+    container_name: ekkle_worker
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - NODE_ENV=development
       - REDIS_URL=redis://redis:6379
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - KIMI_API_KEY=${KIMI_API_KEY}
-      - KIMI_API_BASE_URL=${KIMI_API_BASE_URL:-https://api.moonshot.cn/v1}
-      - KIMI_MODEL=${KIMI_MODEL:-moonshot-v1-128k}
-      - EVOLUTION_API_URL=${EVOLUTION_API_URL}
-      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
-      - EVOLUTION_INSTANCE_NAME=${EVOLUTION_INSTANCE_NAME:-ekkle-sales}
+      - SUPABASE_URL=http://db:5432 # Aponta para o PostgreSQL local
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0 # Chave de dev
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96QvXFod3ZWnPPE-qmqGwezhQLcOx_jWYr9tB1M # Chave de dev
     depends_on:
       redis:
         condition: service_healthy
-      api:
+      db:
         condition: service_healthy
+    volumes:
+      - ./src:/app/src
+    command: bun run --watch src/workers/index.ts
     networks:
       - ekkle-network
-    restart: unless-stopped
 
-  # ===========================================
+  # -------------------------------------------
   # Redis Service
-  # ===========================================
+  # -------------------------------------------
   redis:
     image: redis:7-alpine
-    container_name: ekkle-redis
+    container_name: ekkle_redis
+    restart: always
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
-    networks:
-      - ekkle-network
-    restart: unless-stopped
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 3
-    command: redis-server --appendonly yes
-
-  # ===========================================
-  # Redis Commander (opcional - UI para Redis)
-  # ===========================================
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: ekkle-redis-commander
-    ports:
-      - "8081:8081"
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-    depends_on:
-      - redis
+      retries: 5
     networks:
       - ekkle-network
-    profiles:
-      - debug
 
-# ===========================================
-# Networks
-# ===========================================
+  # -------------------------------------------
+  # PostgreSQL Service (simulando Supabase)
+  # -------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: ekkle_db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ekkle-network
+
 networks:
   ekkle-network:
     driver: bridge
 
-# ===========================================
-# Volumes
-# ===========================================
 volumes:
-  redis-data:
+  redis_data:
+    driver: local
+  db_data:
     driver: local

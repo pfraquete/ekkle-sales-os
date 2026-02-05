@@ -1,13 +1,35 @@
 # ===========================================
 # EKKLE SALES OS - Railway Configuration
+# Configuração para deploy no Railway
 # ===========================================
 
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
+watchPatterns = ["src/**", "package.json", "bun.lockb"]
 
 [deploy]
+# Configurações de deploy
+numReplicas = 1
+startCommand = "bun run src/api/server.ts"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+
+# ===========================================
+# Variáveis de Ambiente Necessárias
+# ===========================================
+# Configure estas variáveis no Railway Dashboard:
+#
+# SUPABASE_URL=https://seu-projeto.supabase.co
+# SUPABASE_ANON_KEY=sua-anon-key
+# SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
+# REDIS_URL=${{Redis.REDIS_URL}}
+# KIMI_API_KEY=sua-kimi-api-key
+# KIMI_API_BASE_URL=https://api.moonshot.cn/v1
+# EVOLUTION_API_URL=https://sua-evolution-api.com
+# EVOLUTION_API_KEY=sua-evolution-api-key
+# EVOLUTION_INSTANCE_NAME=ekkle-sales
+# NODE_ENV=production
+# PORT=3000

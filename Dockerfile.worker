@@ -1,42 +1,57 @@
 # ===========================================
-# EKKLE SALES OS - Worker Dockerfile
-# Dockerfile específico para o worker
+# EKKLE SALES OS - Dockerfile (Worker)
+# Multi-stage build otimizado com Bun
 # ===========================================
 
-# Stage 1: Build
-FROM oven/bun:1.1 AS builder
+# Stage 1: Dependencies
+FROM oven/bun:1.1-alpine AS deps
 
 WORKDIR /app
 
 # Copiar arquivos de dependências
 COPY package.json bun.lockb* ./
 
-# Instalar dependências
-RUN bun install --frozen-lockfile
+# Instalar dependências (production only)
+RUN bun install --frozen-lockfile --production
 
-# Copiar código fonte
-COPY . .
-
-# Stage 2: Production
-FROM oven/bun:1.1-slim AS production
+# ===========================================
+# Stage 2: Builder
+FROM oven/bun:1.1-alpine AS builder
 
 WORKDIR /app
 
-# Criar usuário não-root
+# Copiar dependências do stage anterior
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# ===========================================
+# Stage 3: Production Runtime
+FROM oven/bun:1.1-alpine AS runner
+
+WORKDIR /app
+
+# Instalar procps para pgrep no healthcheck
+RUN apk add --no-cache procps
+
+# Criar usuário não-root para segurança
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 ekkle
 
-# Copiar dependências e código
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
+# Copiar apenas o necessário para produção
+COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
+COPY --from=builder /app/package.json ./
 COPY --from=builder /app/tsconfig.json ./
 
-# Definir usuário
-USER ekkle
-
-# Variáveis de ambiente padrão
+# Definir variáveis de ambiente
 ENV NODE_ENV=production
 
-# Comando para worker
+# Mudar para usuário não-root
+USER ekkle
+
+# Worker healthcheck - verifica se o processo está rodando
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
+    CMD pgrep -f "bun" || exit 1
+
+# Comando de inicialização do Worker
 CMD ["bun", "run", "src/workers/index.ts"]
