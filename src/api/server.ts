@@ -47,11 +47,20 @@ export const createApp = () => {
     .use(errorHandlerMiddleware())
     .use(rateLimitMiddleware())
     
+    // Simple health check endpoint (registered before plugin-based routes)
+    // This ensures /health always works, regardless of prefix handling
+    .get('/health', () => ({
+      success: true,
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      service: 'ekkle-sales-os'
+    }))
+
     // Rotas
     .use(healthRoutes)
     .use(leadsRoutes)
     .use(whatsappWebhook)
-    
+
     // Rota raiz
     .get('/', () => ({
       success: true,

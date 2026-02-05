@@ -12,11 +12,12 @@ const logger = createLogger('health');
 
 export const healthRoutes = new Elysia({ prefix: '/health' })
   /**
-   * Health check básico
+   * Health check básico (at /health/)
+   * Note: /health is also registered directly in server.ts for Railway compatibility
    */
   .get('/', async () => {
-    logger.info('Health check requested');
-    
+    logger.info('Health check requested (with trailing slash)');
+
     return {
       success: true,
       status: 'healthy',

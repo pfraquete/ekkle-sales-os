@@ -60,34 +60,38 @@ const parseEnv = () => {
       console.error(`[CONFIG] Missing or invalid environment variables: ${missingVars}`);
       console.error('[CONFIG] Please check your .env file');
       
-      // Em desenvolvimento, retorna valores padrão para permitir inicialização
-      if (process.env.NODE_ENV === 'development') {
+      // Use fallback values to allow server startup (health checks need to work)
+      // Services will fail when accessed but at least the server can start
+      const isProduction = process.env.NODE_ENV === 'production';
+      if (isProduction) {
+        console.error('[CONFIG] WARNING: Running with partial config in production mode!');
+        console.error('[CONFIG] Some services may not work correctly.');
+      } else {
         console.warn('[CONFIG] Running with partial config in development mode');
-        return {
-          NODE_ENV: 'development' as const,
-          PORT: 3000,
-          API_HOST: '0.0.0.0',
-          SUPABASE_URL: process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
-          SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || 'placeholder',
-          SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder',
-          REDIS_URL: process.env.REDIS_URL,
-          REDIS_HOST: process.env.REDIS_HOST || 'localhost',
-          REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379'),
-          REDIS_PASSWORD: process.env.REDIS_PASSWORD,
-          KIMI_API_KEY: process.env.KIMI_API_KEY || 'placeholder',
-          KIMI_API_BASE_URL: process.env.KIMI_API_BASE_URL || 'https://api.moonshot.cn/v1',
-          KIMI_MODEL: process.env.KIMI_MODEL || 'moonshot-v1-128k',
-          EVOLUTION_API_URL: process.env.EVOLUTION_API_URL || 'https://placeholder.evolution.com',
-          EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY || 'placeholder',
-          EVOLUTION_INSTANCE_NAME: process.env.EVOLUTION_INSTANCE_NAME || 'ekkle-sales',
-          WEBHOOK_SECRET: process.env.WEBHOOK_SECRET,
-          RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '100'),
-          RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
-          LOG_LEVEL: 'info' as const
-        };
       }
-      
-      throw error;
+
+      return {
+        NODE_ENV: (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development',
+        PORT: parseInt(process.env.PORT || '3000'),
+        API_HOST: process.env.API_HOST || '0.0.0.0',
+        SUPABASE_URL: process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
+        SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || 'placeholder',
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder',
+        REDIS_URL: process.env.REDIS_URL,
+        REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+        REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379'),
+        REDIS_PASSWORD: process.env.REDIS_PASSWORD,
+        KIMI_API_KEY: process.env.KIMI_API_KEY || 'placeholder',
+        KIMI_API_BASE_URL: process.env.KIMI_API_BASE_URL || 'https://api.moonshot.cn/v1',
+        KIMI_MODEL: process.env.KIMI_MODEL || 'moonshot-v1-128k',
+        EVOLUTION_API_URL: process.env.EVOLUTION_API_URL || 'https://placeholder.evolution.com',
+        EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY || 'placeholder',
+        EVOLUTION_INSTANCE_NAME: process.env.EVOLUTION_INSTANCE_NAME || 'ekkle-sales',
+        WEBHOOK_SECRET: process.env.WEBHOOK_SECRET,
+        RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '100'),
+        RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
+        LOG_LEVEL: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info'
+      };
     }
     throw error;
   }
