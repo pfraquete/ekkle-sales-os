@@ -186,7 +186,7 @@ ${!isBusinessHours() ? '\n⚠️ ATENÇÃO: Fora do horário comercial!' : ''}
 
     // Resposta de fallback em caso de erro
     return {
-      message: 'Desculpe, estou com dificuldades técnicas no momento. Por favor, tente novamente em alguns minutos ou entre em contato pelo telefone (11) 99999-9999.',
+      message: '🙏 Pastor, desculpe! Tivemos um probleminha técnico. Por favor, tente novamente em alguns minutos. Deus abençoe!',
       intent: 'unknown',
       shouldTransfer: false,
       tokensUsed: 0
